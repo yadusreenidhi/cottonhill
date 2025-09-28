@@ -2,7 +2,8 @@ const apiURL = "https://script.google.com/macros/s/AKfycbz90Y4NGft2IFuYwcrYLpl7b
 const leaderboardDiv = document.getElementById("leaderboard");
 
 let results = [];
-let selectedCategory = {}; // track selected category per event
+let globalCategory = "HS";  // Selected global category
+let searchTerm = "";         // Event search term
 
 // Helper: generate safe ID for HTML elements
 function sanitizeID(str) {
@@ -12,12 +13,15 @@ function sanitizeID(str) {
 // Fetch data from Google Sheet API
 async function fetchResults() {
   try {
-    const response = await fetch(apiURL);
+    // Add timestamp to prevent caching
+    const response = await fetch(apiURL + "?timestamp=" + new Date().getTime());
     results = await response.json();
+
     if (!results || results.length === 0) {
       leaderboardDiv.innerHTML = "No results found.";
       return;
     }
+
     displayAllEventTables();
   } catch (error) {
     leaderboardDiv.innerHTML = "⚠️ Error loading results";
@@ -25,16 +29,21 @@ async function fetchResults() {
   }
 }
 
-// Get unique event types from results
-function getUniqueEvents() {
-  return [...new Set(results.map(r => r["Event Type"]))];
+// Get unique events for current category and search
+function getFilteredEvents() {
+  return [...new Set(
+    results
+      .filter(r => r["Category"] === globalCategory)
+      .filter(r => r["Event Type"].toLowerCase().includes(searchTerm.toLowerCase()))
+      .map(r => r["Event Type"])
+  )];
 }
 
-// Display all event tables with category buttons (HS/HSS/UP only)
+// Display all event tables
 function displayAllEventTables() {
-  const events = getUniqueEvents();
+  const events = getFilteredEvents();
   if (events.length === 0) {
-    leaderboardDiv.innerHTML = "No events found.";
+    leaderboardDiv.innerHTML = "No events found for this category/search.";
     return;
   }
 
@@ -44,63 +53,38 @@ function displayAllEventTables() {
     const tableID = `table-${sanitizeID(eventType)}`;
     html += `<div class="event-section">
       <h2>${eventType} Results</h2>
-      <div class="category-buttons">
-        <button onclick="updateCategory('${eventType}','HS')">HS</button>
-        <button onclick="updateCategory('${eventType}','HSS')">HSS</button>
-        <button onclick="updateCategory('${eventType}','UP')">UP</button>
-      </div>
       <div id="${tableID}">Loading...</div>
     </div>`;
-
-    // Initialize selected category if not already
-    if (!selectedCategory[eventType]) selectedCategory[eventType] = "HS";
   });
 
   leaderboardDiv.innerHTML = html;
 
-  // Display table for each event using its selected category
+  // Display table for each event
   events.forEach(eventType => {
-    displayTable(eventType, selectedCategory[eventType]);
-    highlightActiveButton(eventType, selectedCategory[eventType]);
+    displayTable(eventType);
   });
 }
 
-// Update the selected category for an event and refresh its table
-function updateCategory(eventType, category) {
-  selectedCategory[eventType] = category;
-  displayTable(eventType, category);
-  highlightActiveButton(eventType, category);
-}
-
-// Highlight the active category button for an event
-function highlightActiveButton(eventType, category) {
-  const section = document.querySelector(`#table-${sanitizeID(eventType)}`).parentElement;
-  section.querySelectorAll(".category-buttons button").forEach(btn => {
-    btn.classList.remove("active");
-  });
-  const activeBtn = section.querySelector(`.category-buttons button[onclick="updateCategory('${eventType}','${category}')"]`);
-  if (activeBtn) activeBtn.classList.add("active");
-}
-
-// Display table for a given event and category (only top 2 positions)
-function displayTable(eventType, category) {
+// Display table for a given event
+function displayTable(eventType) {
   const tableDiv = document.getElementById(`table-${sanitizeID(eventType)}`);
   if (!tableDiv) return;
 
   let filtered = results.filter(
-    r => r["Event Type"] === eventType && r["Category"] === category
+    r => r["Event Type"] === eventType && r["Category"] === globalCategory
   );
 
-  // Show only top 2 positions
-  filtered = filtered.filter(r => Number(r["RANK"]) <= 2);
-
   if (filtered.length === 0) {
-    tableDiv.innerHTML = "No results for this category.";
+    tableDiv.innerHTML = "No results for this event in this category.";
     return;
   }
 
-  // Sort by RANK ascending
-  filtered.sort((a, b) => Number(a["RANK"]) - Number(b["RANK"]));
+  // Sort by RANK ascending (empty ranks at the end)
+  filtered.sort((a, b) => {
+    const rankA = Number(a["RANK"]) || 999;
+    const rankB = Number(b["RANK"]) || 999;
+    return rankA - rankB;
+  });
 
   let table = `<table>
     <tr><th>Position</th><th>Name of Student</th><th>Class</th><th>Admission No</th></tr>`;
@@ -111,7 +95,7 @@ function displayTable(eventType, category) {
     else if (Number(row["RANK"]) === 2) rowClass = "top2";
 
     table += `<tr class="${rowClass}">
-      <td>${row["RANK"]}</td>
+      <td>${row["RANK"] || '-'}</td>
       <td>${row["Participant"]}</td>
       <td>${row["Class"]}</td>
       <td>${row["Ad no"]}</td>
@@ -122,6 +106,25 @@ function displayTable(eventType, category) {
   tableDiv.innerHTML = table;
 }
 
-// Auto-refresh every 10 seconds while preserving selected categories
+// Update global category when button clicked
+function updateGlobalCategory(category) {
+  globalCategory = category;
+
+  // Highlight active button
+  document.querySelectorAll("#globalCategoryButtons button").forEach(btn => {
+    btn.classList.remove("active");
+    if (btn.textContent === category) btn.classList.add("active");
+  });
+
+  displayAllEventTables();
+}
+
+// Update search term when typing
+function updateEventSearch() {
+  searchTerm = document.getElementById("eventSearchInput").value;
+  displayAllEventTables();
+}
+
+// Initial fetch
 fetchResults();
-setInterval(fetchResults, 10000);
+setInterval(fetchResults, 10000); // Auto-refresh every 10 seconds
