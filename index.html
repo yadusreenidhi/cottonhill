@@ -9,12 +9,21 @@
 <body>
 
   <header>
-    <img src="banner.png" alt="Event Banner" class="header-img" style="max-width:25%; height:auto;">
+    <img src="banner.png" alt="Event Banner" class="header-img" style="max-width:180px; height:auto;">
     <img src="logo.png" alt="Event Logo" style="height:150px;">
   </header>
 
   <main>
-    <div id="eventButtons"></div> <!-- Buttons will go here -->
+    <!-- Sticky Filter Bar -->
+    <div id="stickyFilterBar">
+      <div class="category-buttons" id="globalCategoryButtons">
+        <button onclick="updateGlobalCategory('HS')">HS</button>
+        <button onclick="updateGlobalCategory('HSS')">HSS</button>
+        <button onclick="updateGlobalCategory('UP')">UP</button>
+      </div>
+      <input type="text" id="eventSearchInput" placeholder="Search for event..." oninput="updateEventSearch()">
+    </div>
+
     <div id="leaderboard">Loading live results...</div>
   </main>
 
